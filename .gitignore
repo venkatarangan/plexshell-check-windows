@@ -1,0 +1,12 @@
+# Local scan results may contain Windows usernames, SIDs, paths and addresses.
+Plex-Triage-*/
+report.json
+report.txt
+*.log
+*.log.*
+
+# Local test fixtures and generated test reports.
+test-*/
+
+# Alternate local Git metadata for restricted workspaces.
+.local-git/
