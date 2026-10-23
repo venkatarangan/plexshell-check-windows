@@ -11,3 +11,7 @@ test-*/
 
 # Alternate local Git metadata for restricted workspaces.
 .local-git/
+
+# Local contributor instructions.
+AGENTS.md
+agents.md
