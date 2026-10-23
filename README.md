@@ -1,6 +1,6 @@
 # Plex2Shell check for Windows
 
-A cursory, read-only scan for Plex2Shell indicators on a Windows Plex Media Server. Requires Windows PowerShell 5.1 or PowerShell 7; no extra modules.
+A read-only scanner for indicators of the October 2026 Plex2Shell exploit on Windows 11 PCs running Plex Media Server. Requires Windows PowerShell 5.1 or PowerShell 7 on Windows; no extra modules.
 
 ## What happened
 
@@ -16,7 +16,7 @@ This is an independent Windows implementation. It can flag evidence worth invest
 
 ## Run
 
-Download [Plex2Shell-Windows-Check.zip](Plex2Shell-Windows-Check.zip?raw=true) and extract it, then open PowerShell in that folder **as the Windows account running Plex**. Keep Plex running for live checks. Elevate under that same account if access is denied. The ZIP includes this README, the PowerShell script, the batch launcher and the profile-discovery test.
+Download [Plex2Shell-Windows-Check.zip](Plex2Shell-Windows-Check.zip?raw=true) and extract it, then open PowerShell in that folder **as the Windows account running Plex**. Keep Plex running for live checks. Elevate under that same account if access is denied. The ZIP includes this README, the license, the PowerShell script, the batch launcher and the tests.
 
 ```powershell
 .\Check-Plex2Shell.ps1
@@ -52,14 +52,16 @@ Open `report.txt` in the printed `Plex-Triage-*` folder. `report.json` also cont
 
 | Result | Meaning |
 | --- | --- |
-| **High** | Suspicious process, payload filename, shell under Plex, or file-write setting. Investigate promptly; a match alone doesn't confirm infection. |
+| **High** | Vulnerable Plex executable version, suspicious process, payload filename, shell under Plex, or file-write setting. Investigate promptly; a match alone doesn't confirm infection. |
 | **Review** | Log patterns, custom settings, unusual codec files, or network clues. Legitimate activity can match. |
 | **Info** | Process and connection context. |
 | **Coverage gaps** | Checks skipped or incomplete. Read these even when there are no findings. |
 
-Older versions marked `BelowFixedVersion: True` in logs describe historical runs. Use the executable's version observation to assess the installed build. Multiple data folders can belong to different Windows accounts or old installations. An empty coverage-gap list means no check reported a gap; the scope limits below still apply.
+An executable below **1.43.3.10861** produces a prominent update warning and a High finding, even if no exploit indicators were found. Update to the latest Plex release. This warning establishes a vulnerable build, not successful exploitation. `VulnerableExecutableCount` in JSON counts distinct executable path/version observations.
 
-**Easiest interpretation:** give ChatGPT or Claude this README and `report.txt`; include `report.json` for file details. Review and redact private paths, usernames, filenames, and addresses before uploading. Raw log lines, registry values, and process command lines are intentionally omitted, but reports are not guaranteed secret-free.
+Version observations include a `Source`: `Executable` or `HistoricalLog`. Older versions marked `BelowFixedVersion: True` in logs describe historical runs and do not trigger the executable warning. Use the executable's version observation to assess the installed build. Multiple data folders can belong to different Windows accounts or old installations. An empty coverage-gap list means no check reported a gap; the scope limits below still apply.
+
+**Easiest interpretation:** give ChatGPT or Claude this README and `report.txt`; include `report.json` for file details. Review and redact private paths, usernames, Windows account SIDs, filenames, and IP addresses before uploading or posting to GitHub. Raw log lines, registry values, and process command lines are intentionally omitted, but reports are not guaranteed secret-free. The scanner does not upload reports. Keep reports and source logs out of the repository; `.gitignore` excludes common report names and folders, but custom output names still need review.
 
 Suggested prompt:
 
@@ -75,17 +77,24 @@ Normal DLLs belong in `Codecs`. Unfamiliar names and executable padding are heur
 
 Rotated/compressed logs, unloaded user hives, memory, persistence mechanisms, and removed evidence can escape these checks. **No findings does not prove no compromise.**
 
-If findings are suspicious, preserve reports and logs, restrict remote access, and follow [Plex's recovery guidance](https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319/3). Updating alone does not remove an existing compromise.
+If findings are suspicious, preserve reports and logs, restrict remote access, and follow [Plex's recovery guidance](https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319/3). Sign out of all devices from your Plex account settings and change your Plex password if compromise is suspected. Plex recommends rebuilding from a clean installation when compromise cannot be ruled out. Treat shares and credentials accessible to the Plex account as potentially exposed. Updating alone does not remove an existing compromise.
 
 ## Validation
 
-A Windows scan supplied during development confirmed discovery of user data folders and codec inventory without the unrelated SYSTEM-profile fallback. This validates that scan's folder discovery, not malware detection accuracy. Synthetic profile-discovery checks are included; they have not been run in the development environment because PowerShell is unavailable here.
+A Windows scan supplied during development confirmed discovery of user data folders and codec inventory without the unrelated SYSTEM-profile fallback. This validates that scan's folder discovery, not malware detection accuracy. Synthetic tests cover profile discovery, version warnings, offline indicators, XML handling and omission of raw log content from reports. They have not been run in the development environment because PowerShell is unavailable here. A GitHub Actions workflow runs them on a Windows runner with Windows PowerShell 5.1 and PowerShell 7; check its results before relying on compatibility. This is not a completed Windows 11 validation.
 
 To run those checks on Windows:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-ProfileDiscovery.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Reporting.ps1
 ```
+
+The scanner writes results to reports; its exit status does not classify findings. Automation should inspect `Status`, `HighPriorityCount`, `ReviewCount`, `VulnerableExecutableCount` and `CoverageGaps` in `report.json`.
+
+## License and credits
+
+Licensed under [GNU GPL version 3.0](LICENSE). The Windows implementation was informed by the GPL-3.0 [Linux checker](https://github.com/ChrisLPJones/plex2shell-check) and [Zach Main's Plex2Shell research and detection content](https://github.com/code-zm/plex2shell). Those projects retain their respective copyrights. Exploit code is not bundled or executed.
 
 ## References
 

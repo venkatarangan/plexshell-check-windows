@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+# SPDX-License-Identifier: GPL-3.0-only
 # Run on Windows: powershell.exe -NoProfile -File .\tests\Test-ProfileDiscovery.ps1
 # Runs the scanner against synthetic user profiles; no live host checks are used.
 $ErrorActionPreference = 'Stop'

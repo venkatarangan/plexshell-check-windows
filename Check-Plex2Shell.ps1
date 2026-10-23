@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+# SPDX-License-Identifier: GPL-3.0-only
 <#
 .SYNOPSIS
 Read-only Windows Plex2Shell indicator triage. Writes reports only.
@@ -24,10 +25,10 @@ $fixed = [version]'1.43.3.10861'
 function Add-Finding($Level, $Check, $Location, $Detail) {
     $findings.Add([pscustomobject]@{Level=$Level; Check=$Check; Location=$Location; Detail=$Detail})
 }
-function Add-Version($Text, $Location) {
+function Add-Version($Text, $Location, $Source = 'HistoricalLog') {
     if ($Text -match '(?<!\d)(1\.\d+\.\d+\.\d+)') {
         $v = $Matches[1]
-        $versions.Add([pscustomobject]@{Version=$v; Location=$Location; BelowFixedVersion=([version]$v -lt $fixed)})
+        $versions.Add([pscustomobject]@{Version=$v; Location=$Location; Source=$Source; BelowFixedVersion=([version]$v -lt $fixed)})
     }
 }
 $rules = [ordered]@{
@@ -212,7 +213,7 @@ if (-not $Offline) {
                 }
                 if (-not $p.ExecutablePath) { $gaps.Add('Executable path unavailable for ' + $where + '; try elevation.') }
                 elseif ($p.Name -ieq 'Plex Media Server.exe') {
-                    Add-Version ([Diagnostics.FileVersionInfo]::GetVersionInfo($p.ExecutablePath).FileVersion) $p.ExecutablePath
+                    Add-Version ([Diagnostics.FileVersionInfo]::GetVersionInfo($p.ExecutablePath).FileVersion) $p.ExecutablePath 'Executable'
                 }
             }
         }
@@ -242,7 +243,7 @@ if (-not $Offline) {
     foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
         if ($base) {
             $exe = Join-Path $base 'Plex\Plex Media Server\Plex Media Server.exe'
-            try { if (Test-Path -LiteralPath $exe) { Add-Version ([Diagnostics.FileVersionInfo]::GetVersionInfo($exe).FileVersion) $exe } }
+            try { if (Test-Path -LiteralPath $exe) { Add-Version ([Diagnostics.FileVersionInfo]::GetVersionInfo($exe).FileVersion) $exe 'Executable' } }
             catch { $gaps.Add('Could not read installed version at ' + $exe) }
         }
     }
@@ -337,15 +338,20 @@ foreach ($root in ($roots | Select-Object -Unique)) {
     } catch { $gaps.Add('Could not enumerate logs at ' + $logDir) }
 }
 if (-not $checked.Count) { $gaps.Add('NO PLEX DATA FOLDER INSPECTED. Supply -DataPath with the actual Plex server data directory.') }
+$vulnerableExecutables = @($versions | Where-Object { $_.Source -eq 'Executable' -and $_.BelowFixedVersion } | Sort-Object Location,Version -Unique)
+foreach ($observation in $vulnerableExecutables) {
+    Add-Finding 'High' 'Vulnerable Plex executable version' $observation.Location ('Version ' + $observation.Version + ' is below the Plex2Shell fixed version ' + $fixed + '. Update to the latest Plex release immediately. A vulnerable version alone does not prove compromise.')
+}
 $high = @($findings | Where-Object { $_.Level -eq 'High' }).Count
 $review = @($findings | Where-Object { $_.Level -eq 'Review' }).Count
 $status = 'No configured indicators detected; this is NOT a clean bill of health.'
 if ($high -or $review) { $status = 'Indicators or review items found. Investigate before concluding whether compromise occurred.' }
 if ($gaps.Count) { $status += ' Coverage is incomplete; read CoverageGaps.' }
 if (-not $checked.Count) { $status = 'INCOMPLETE: no Plex data folder inspected.' }
+if ($vulnerableExecutables.Count) { $status = 'WARNING: vulnerable Plex executable detected. Update immediately. ' + $status }
 $report = [ordered]@{
     GeneratedUtc=[DateTime]::UtcNow.ToString('o'); Status=$status
-    HighPriorityCount=$high; ReviewCount=$review; DataFolders=$checked
+    HighPriorityCount=$high; ReviewCount=$review; VulnerableExecutableCount=$vulnerableExecutables.Count; DataFolders=$checked
     Limitations=@('A snapshot cannot rule out historical compromise, removed payloads or expired logs.', 'Codec hashes are inventory only; no known-good baseline or malware hash database is used.', 'Ordinary DLL files are not flagged solely for being DLLs. Their presence is neither proof of infection nor proof of safety.', 'Live descendants may disappear; persistent tasks, services, registry autoruns, memory and all other users are not comprehensively inspected.', 'Historical vulnerable versions do not prove the server was reachable or exploited at that time.', 'No raw log lines, command lines or Plex tokens are intentionally exported. Paths, addresses and filenames can still be private.')
     CoverageGaps=$gaps.ToArray(); RegistryKeysInspected=$registryChecked.ToArray(); Versions=@($versions | Sort-Object Version,Location -Unique)
     Findings=$findings.ToArray(); CodecFiles=$inventory.ToArray()
