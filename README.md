@@ -16,7 +16,7 @@ This is an independent Windows implementation. It can flag evidence worth invest
 
 ## Run
 
-Download and extract the files, then open PowerShell in that folder **as the Windows account running Plex**. Keep Plex running for live checks. Elevate under that same account if access is denied.
+Download [Plex2Shell-Windows-Check.zip](Plex2Shell-Windows-Check.zip?raw=true) and extract it, then open PowerShell in that folder **as the Windows account running Plex**. Keep Plex running for live checks. Elevate under that same account if access is denied. The ZIP includes this README, the PowerShell script, the batch launcher and the profile-discovery test.
 
 ```powershell
 .\Check-Plex2Shell.ps1
@@ -57,6 +57,8 @@ Open `report.txt` in the printed `Plex-Triage-*` folder. `report.json` also cont
 | **Info** | Process and connection context. |
 | **Coverage gaps** | Checks skipped or incomplete. Read these even when there are no findings. |
 
+Older versions marked `BelowFixedVersion: True` in logs describe historical runs. Use the executable's version observation to assess the installed build. Multiple data folders can belong to different Windows accounts or old installations. An empty coverage-gap list means no check reported a gap; the scope limits below still apply.
+
 **Easiest interpretation:** give ChatGPT or Claude this README and `report.txt`; include `report.json` for file details. Review and redact private paths, usernames, filenames, and addresses before uploading. Raw log lines, registry values, and process command lines are intentionally omitted, but reports are not guaranteed secret-free.
 
 Suggested prompt:
@@ -74,6 +76,16 @@ Normal DLLs belong in `Codecs`. Unfamiliar names and executable padding are heur
 Rotated/compressed logs, unloaded user hives, memory, persistence mechanisms, and removed evidence can escape these checks. **No findings does not prove no compromise.**
 
 If findings are suspicious, preserve reports and logs, restrict remote access, and follow [Plex's recovery guidance](https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319/3). Updating alone does not remove an existing compromise.
+
+## Validation
+
+A Windows scan supplied during development confirmed discovery of user data folders and codec inventory without the unrelated SYSTEM-profile fallback. This validates that scan's folder discovery, not malware detection accuracy. Synthetic profile-discovery checks are included; they have not been run in the development environment because PowerShell is unavailable here.
+
+To run those checks on Windows:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-ProfileDiscovery.ps1
+```
 
 ## References
 
