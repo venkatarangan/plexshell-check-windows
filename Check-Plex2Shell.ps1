@@ -57,6 +57,25 @@ function Check-Options($Name, $Value, $Location) {
     }
 }
 $roots = New-Object 'System.Collections.Generic.List[string]'
+$profiles = @()
+function Get-PlexProfilePath($Sid) {
+    if (-not $Sid) { return $null }
+    $profile = $profiles | Where-Object { $_.SID -eq $Sid } | Select-Object -First 1
+    if ($profile.LocalPath) { return $profile.LocalPath }
+    try {
+        $key = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $Sid
+        $value = (Get-ItemProperty -LiteralPath $key -Name ProfileImagePath).ProfileImagePath
+        if ($value) { return [Environment]::ExpandEnvironmentVariables($value) }
+    } catch { }
+    return $null
+}
+function Add-PlexProfileFolder($ProfilePath) {
+    if (-not $ProfilePath) { return }
+    $candidate = Join-Path $ProfilePath 'AppData\Local\Plex Media Server'
+    try {
+        if (Test-Path -LiteralPath $candidate -PathType Container) { $roots.Add($candidate) }
+    } catch { $gaps.Add('Could not check user data folder: ' + $candidate) }
+}
 function Check-CodecContent($File) {
     # Read bytes as data only. Never load the library or execute its code.
     # Large uniform tails can also occur in legitimate binaries.
@@ -96,10 +115,24 @@ function Read-PlexRegistry($Key) {
             $r = Get-ItemProperty -LiteralPath $Key
             foreach ($prop in $r.PSObject.Properties) { Check-Options $prop.Name $prop.Value $Key }
             if (-not $DataPath -and $r.LocalAppDataPath) {
-                $roots.Add((Join-Path ([Environment]::ExpandEnvironmentVariables($r.LocalAppDataPath)) 'Plex Media Server'))
-                if ($r.LocalAppDataPath -match '%') {
-                    $gaps.Add('Custom data path contains environment variables; when using a different account, confirm the resolved folder with -DataPath: ' + $Key)
+                $base = [string]$r.LocalAppDataPath
+                if ($base -match '%') {
+                    $sid = $null
+                    if ($Key -match 'HKEY_USERS\\(S-[^\\]+)\\') { $sid = $Matches[1] }
+                    elseif ($Key -match 'HKEY_CURRENT_USER\\') { $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
+                    $profilePath = Get-PlexProfilePath $sid
+                    if ($profilePath) {
+                        $variables = @{USERPROFILE=$profilePath; LOCALAPPDATA=(Join-Path $profilePath 'AppData\Local'); APPDATA=(Join-Path $profilePath 'AppData\Roaming')}
+                        foreach ($token in [regex]::Matches($base, '%([^%]+)%')) {
+                            if ($variables.ContainsKey($token.Groups[1].Value)) { $base = $base.Replace($token.Value, $variables[$token.Groups[1].Value]) }
+                        }
+                    }
+                    # Do not expand another account's variables in the scanner's environment.
+                    if ($base -match '%') {
+                        $gaps.Add('Custom data path has unresolved environment variables; supply -DataPath for ' + $Key)
+                    }
                 }
+                if ($base -notmatch '%') { $roots.Add((Join-Path $base 'Plex Media Server')) }
             }
             $registryChecked.Add($Key)
             $registrySeen[$Key] = $true
@@ -111,6 +144,18 @@ if ($DataPath) { foreach ($p in $DataPath) { $roots.Add($p) } }
 $processes = @()
 $related = @{}
 if (-not $Offline) {
+    try { $profiles = @(Get-CimInstance Win32_UserProfile) }
+    catch {
+        $gaps.Add('User profiles could not be enumerated via CIM; trying the Windows profile registry.')
+        try {
+            $profiles = @(Get-ChildItem 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' | Where-Object {
+                $_.PSChildName -match '^S-1-(5-21|12-1)-'
+            } | ForEach-Object {
+                $value = Get-ItemProperty -LiteralPath $_.PSPath -Name ProfileImagePath
+                [pscustomobject]@{SID=$_.PSChildName; LocalPath=[Environment]::ExpandEnvironmentVariables($value.ProfileImagePath); Special=$false}
+            })
+        } catch { $gaps.Add('Windows profile registry discovery failed; supply -DataPath with the Plex user data folder.') }
+    }
     # Inspect only loaded user hives. Never load or modify another user's hive.
     $keys = @('Registry::HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server')
     try {
@@ -121,17 +166,6 @@ if (-not $Offline) {
     foreach ($key in ($keys | Select-Object -Unique)) {
         $null = Read-PlexRegistry $key
     }
-    if (-not $DataPath) {
-        if ($env:LOCALAPPDATA) { $roots.Add((Join-Path $env:LOCALAPPDATA 'Plex Media Server')) }
-        try {
-            foreach ($profile in (Get-CimInstance Win32_UserProfile)) {
-                if ($profile.LocalPath) {
-                    $p = Join-Path $profile.LocalPath 'AppData\Local\Plex Media Server'
-                    if (Test-Path -LiteralPath $p) { $roots.Add($p) }
-                }
-            }
-        } catch { $gaps.Add('Other user profiles could not be enumerated; use -DataPath for a different Plex account.') }
-    }
     try {
         $processes = @(Get-CimInstance Win32_Process)
         foreach ($p in $processes) {
@@ -140,6 +174,7 @@ if (-not $Offline) {
                 try {
                     $owner = Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid
                     if ($owner.ReturnValue -ne 0 -or -not $owner.Sid) { throw 'Owner SID unavailable' }
+                    if (-not $DataPath) { Add-PlexProfileFolder (Get-PlexProfilePath $owner.Sid) }
                     $ownerKey = 'Registry::HKEY_USERS\' + $owner.Sid + '\Software\Plex, Inc.\Plex Media Server'
                     if (Read-PlexRegistry $ownerKey) {
                         Add-Finding 'Info' 'Running Plex account settings inspected' ('PID ' + $p.ProcessId) $ownerKey
@@ -183,6 +218,11 @@ if (-not $Offline) {
         }
         if ($related.Count -eq 0) { $gaps.Add('Plex was not running. Live process and connection checks cannot describe its prior activity.') }
     } catch { $gaps.Add('Live process inspection failed: ' + $_.Exception.GetType().Name) }
+    if (-not $DataPath) {
+        foreach ($profile in $profiles) {
+            if (-not $profile.Special) { Add-PlexProfileFolder $profile.LocalPath }
+        }
+    }
     try {
         foreach ($c in (Get-NetTCPConnection -State Established)) {
             if ($c.RemotePort -in @(3333,14444,14433,45700)) {
@@ -315,6 +355,8 @@ $null = New-Item -ItemType Directory -Path $OutputDirectory -Force
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'report.json') -Encoding UTF8
 $summary = @('PLEX2SHELL WINDOWS TRIAGE', $status, ('High priority: ' + $high + '; review items: ' + $review), '', 'COVERAGE GAPS')
 $summary += $gaps.ToArray()
+$summary += @('', 'PLEX DATA FOLDERS INSPECTED')
+$summary += $checked
 $summary += @('', 'PLEX REGISTRY KEYS SUCCESSFULLY INSPECTED')
 $summary += $registryChecked.ToArray()
 $summary += @('', 'VERSION OBSERVATIONS (historical versions are not current exposure)', ($report.Versions | Format-Table -AutoSize | Out-String -Width 240), 'FINDINGS', ($findings | Format-List | Out-String -Width 240), 'LIMITATIONS')

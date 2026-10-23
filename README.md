@@ -30,7 +30,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Check-Plex2Shell.ps1
 
 Alternatively, run `check-plex2shell.bat` from a terminal. It uses the same policy override and accepts script arguments.
 
-The default server data folder is `%LOCALAPPDATA%\Plex Media Server`. For a custom location or another Plex account, specify the folder containing `Codecs` and `Logs`:
+The usual server data folder is `C:\Users\<PlexUser>\AppData\Local\Plex Media Server`. Discovery checks the running Plex account's profile, existing folders in normal Windows user profiles, and custom paths in loaded Plex registry settings. It does not blindly use the scanning account's `%LOCALAPPDATA%`, which can point to `systemprofile` when run as SYSTEM.
+
+Confirm the path under **PLEX DATA FOLDERS INSPECTED** in `report.txt`. For a custom location or another Plex account, specify the folder containing `Codecs` and `Logs`:
 
 ```powershell
 .\Check-Plex2Shell.ps1 -DataPath 'D:\PlexData\Plex Media Server'
