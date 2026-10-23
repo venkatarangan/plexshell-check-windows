@@ -16,7 +16,7 @@ This is an independent Windows implementation. It can flag evidence worth invest
 
 ## Run
 
-Download [Plex2Shell-Windows-Check.zip](Plex2Shell-Windows-Check.zip?raw=true) and extract it, then open PowerShell in that folder **as the Windows account running Plex**. Keep Plex running for live checks. Elevate under that same account if access is denied. The ZIP includes this README, the license, the PowerShell script, the batch launcher and the tests.
+Download [Plex2Shell-Windows-Check.zip](Plex2Shell-Windows-Check.zip?raw=true) and extract it, then open PowerShell in that folder **as the Windows account running Plex**. Keep Plex running for live checks. Elevate under that same account if access is denied. The ZIP includes this README, the license, the PowerShell script and the batch launcher.
 
 ```powershell
 .\Check-Plex2Shell.ps1
@@ -81,14 +81,7 @@ If findings are suspicious, preserve reports and logs, restrict remote access, a
 
 ## Validation
 
-A Windows scan supplied during development confirmed discovery of user data folders and codec inventory without the unrelated SYSTEM-profile fallback. This validates that scan's folder discovery, not malware detection accuracy. Synthetic tests cover profile discovery, version warnings, offline indicators, XML handling and omission of raw log content from reports. They have not been run in the development environment because PowerShell is unavailable here. A GitHub Actions workflow runs them on a Windows runner with Windows PowerShell 5.1 and PowerShell 7; check its results before relying on compatibility. This is not a completed Windows 11 validation.
-
-To run those checks on Windows:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-ProfileDiscovery.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Reporting.ps1
-```
+A Windows scan supplied during development confirmed discovery of user data folders and codec inventory without the unrelated SYSTEM-profile fallback. This validates that scan's folder discovery, not malware detection accuracy. The latest changes have not been run in the development environment because PowerShell is unavailable here. Full Windows 11 and PowerShell compatibility validation remains outstanding.
 
 The scanner writes results to reports; its exit status does not classify findings. Automation should inspect `Status`, `HighPriorityCount`, `ReviewCount`, `VulnerableExecutableCount` and `CoverageGaps` in `report.json`.
 

@@ -6,6 +6,7 @@ report.txt
 *.log.*
 
 # Local test fixtures and generated test reports.
+tests/
 test-*/
 
 # Alternate local Git metadata for restricted workspaces.
