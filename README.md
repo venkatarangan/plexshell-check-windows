@@ -2,6 +2,12 @@
 
 A cursory, read-only scan for Plex2Shell indicators on a Windows Plex Media Server. Requires Windows PowerShell 5.1 or PowerShell 7; no extra modules.
 
+## What happened
+
+**Plex2Shell** chains four vulnerabilities (CVE-2026-96652, CVE-2026-96654, CVE-2026-96655 and CVE-2026-96656) to let a remote attacker run code as the Plex server account without logging in. Plex fixed the chain in **1.43.3.10861**; older internet-facing servers are at risk. See [Plex's official security advisory](https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319/3).
+
+The [researcher's proof of concept](https://github.com/code-zm/plex2shell) demonstrated how request-handling, internal API, token and codec-loading weaknesses could be combined into a server takeover. Plex says the exploit became public on **16 October 2026**, followed by widespread attacks installing miners and proxy software. The [official advisory thread](https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319) provides update instructions, confirmed indicators and recovery guidance.
+
 ## Why I made this
 
 I run Plex Media Server on my Windows 11 PC and update it regularly, including before the latest security vulnerability was disclosed. I wanted to check for signs of infection before upgrading. The scripts I found online targeted Linux, so I asked OpenAI GPT Sol to write a PowerShell script for Windows using the references below, including [ChrisLPJones/plex2shell-check](https://github.com/ChrisLPJones/plex2shell-check).
